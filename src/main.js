@@ -43,7 +43,6 @@ const scanResultsListEl = document.getElementById("scan-results-list");
 const saveBaselineBtn = document.getElementById("save-baseline-btn");
 const clearBaselineBtn = document.getElementById("clear-baseline-btn");
 const baselineStatusEl = document.getElementById("baseline-status");
-const baselineCompareListEl = document.getElementById("baseline-compare-list");
 
 const spectrumCtx = spectrumCanvas.getContext("2d");
 let analyser = null;
@@ -268,6 +267,7 @@ scanBtn.addEventListener("click", async () => {
   micDisableBtn.disabled = true;
   saveBaselineBtn.hidden = true;
   scanResultsListEl.innerHTML = "";
+  const baselineForThisRun = loadBaseline();
 
   try {
     await loadCaptureWorklet();
@@ -278,13 +278,14 @@ scanBtn.addEventListener("click", async () => {
       stopCapture,
       onStep: (step, index, total) => {
         scanStatusEl.textContent = `Step ${index}/${total}: ${step.frequencyHz} Hz -> ${step.levelDb.toFixed(1)} dBFS`;
-        appendScanResultRow(step);
+        appendScanResultRow(step, baselineForThisRun);
       },
     });
     lastScanResults = results;
-    scanStatusEl.textContent = `Scan complete: ${results.length} frequencies.`;
+    scanStatusEl.textContent = baselineForThisRun
+      ? `Scan complete: ${results.length} frequencies, compared against baseline above.`
+      : `Scan complete: ${results.length} frequencies. Save this as baseline, then scan again in the room to compare.`;
     saveBaselineBtn.hidden = false;
-    renderBaselineComparison();
   } catch (err) {
     scanStatusEl.textContent = `Scan failed: ${err.message}`;
   } finally {
@@ -294,12 +295,22 @@ scanBtn.addEventListener("click", async () => {
   }
 });
 
-function appendScanResultRow(step) {
+function appendScanResultRow(step, baseline) {
   const li = document.createElement("li");
   const freq = document.createElement("span");
   freq.textContent = `${step.frequencyHz} Hz`;
   const level = document.createElement("span");
-  level.textContent = `${step.levelDb.toFixed(1)} dBFS`;
+
+  const baselineStep = baseline?.results.find((b) => b.frequencyHz === step.frequencyHz);
+  if (baselineStep) {
+    const deltaDb = step.levelDb - baselineStep.levelDb;
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS (${deltaDb >= 0 ? "+" : ""}${deltaDb.toFixed(1)} dB vs baseline)`;
+  } else if (baseline) {
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS (no baseline data at this frequency)`;
+  } else {
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS`;
+  }
+
   li.append(freq, level);
   scanResultsListEl.appendChild(li);
 }
@@ -320,7 +331,7 @@ function renderBaselineStatus() {
     clearBaselineBtn.hidden = true;
     return;
   }
-  baselineStatusEl.textContent = `Baseline saved ${new Date(baseline.savedAt).toLocaleString()} — ${baseline.results.length} frequencies scanned.`;
+  baselineStatusEl.textContent = `Baseline saved ${new Date(baseline.savedAt).toLocaleString()} — ${baseline.results.length} frequencies scanned. Run a new scan to compare against it.`;
   clearBaselineBtn.hidden = false;
 }
 
@@ -332,51 +343,14 @@ saveBaselineBtn.addEventListener("click", () => {
   };
   localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(payload));
   renderBaselineStatus();
-  renderBaselineComparison();
 });
 
 clearBaselineBtn.addEventListener("click", () => {
   localStorage.removeItem(BASELINE_STORAGE_KEY);
   renderBaselineStatus();
-  renderBaselineComparison();
 });
 
-function renderBaselineComparison() {
-  baselineCompareListEl.innerHTML = "";
-  const baseline = loadBaseline();
-  if (!baseline) {
-    const li = document.createElement("li");
-    li.className = "empty";
-    li.textContent = "Save a baseline scan (ideally in a neutral/open space) to compare against.";
-    baselineCompareListEl.appendChild(li);
-    return;
-  }
-  if (lastScanResults.length === 0) {
-    const li = document.createElement("li");
-    li.className = "empty";
-    li.textContent = "Run a scan to compare against the saved baseline.";
-    baselineCompareListEl.appendChild(li);
-    return;
-  }
-  for (const step of lastScanResults) {
-    const baselineStep = baseline.results.find((b) => b.frequencyHz === step.frequencyHz);
-    const li = document.createElement("li");
-    const freq = document.createElement("span");
-    freq.textContent = `${step.frequencyHz} Hz`;
-    const info = document.createElement("span");
-    if (baselineStep) {
-      const deltaDb = step.levelDb - baselineStep.levelDb;
-      info.textContent = `${deltaDb >= 0 ? "+" : ""}${deltaDb.toFixed(1)} dB vs baseline`;
-    } else {
-      info.textContent = "no baseline data at this frequency";
-    }
-    li.append(freq, info);
-    baselineCompareListEl.appendChild(li);
-  }
-}
-
 renderBaselineStatus();
-renderBaselineComparison();
 
 function renderWaveform(samples) {
   const { width, height } = waveformCanvas;

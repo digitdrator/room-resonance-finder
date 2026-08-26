@@ -76,25 +76,22 @@
       noise. Takes about 15 seconds. Keep the phone still and quiet
       surroundings for a meaningful result.
     </p>
+    <p class="warn">
+      Workflow: run this scan once in a neutral/open space and tap
+      "Save this scan as baseline" below. Then come back (same page,
+      baseline is saved on this phone) and run the scan again in the room
+      you want to check — this list will then show, per frequency, how
+      many dB louder or quieter the room scan is versus your saved
+      baseline. Large positive values are room-effect candidates; this is
+      NOT a calibrated measurement and device drift/position also affect
+      it.
+    </p>
     <button id="scan-btn" disabled>Run scan</button>
     <p id="scan-status" class="status">Not started.</p>
+    <p id="baseline-status" class="status">No baseline saved yet.</p>
     <ul id="scan-results-list" class="peaks-list"></ul>
     <button id="save-baseline-btn" hidden>Save this scan as baseline</button>
-  </section>
-
-  <section class="card">
-    <h2>6. Baseline comparison</h2>
-    <p class="warn">
-      A baseline is a reference scan of this same phone — ideally run in a
-      neutral/open space. It is NOT a calibrated speaker measurement. This
-      shows, per test frequency, how much louder or quieter the current
-      scan is versus the saved baseline — large positive values are
-      candidates for a room effect, but device drift, phone position and
-      volume also affect this. Not certain.
-    </p>
     <button id="clear-baseline-btn" hidden>Clear baseline</button>
-    <p id="baseline-status" class="status">No baseline saved yet.</p>
-    <ul id="baseline-compare-list" class="peaks-list"></ul>
   </section>
 
   <section class="card">
