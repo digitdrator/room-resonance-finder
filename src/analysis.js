@@ -32,6 +32,20 @@ export function magnitudeSpectrum(samples, sampleRate) {
   return { frequencies, magnitudes };
 }
 
+// Quadratic (parabolic) interpolation of a spectral peak using the peak
+// bin and its immediate neighbors in log-magnitude (dB). Standard cheap
+// technique to estimate a sub-bin frequency without a bigger FFT window.
+// Returns a fractional bin offset in [-0.5, 0.5].
+function parabolicOffset(magDb, i) {
+  const y0 = magDb[i - 1];
+  const y1 = magDb[i];
+  const y2 = magDb[i + 1];
+  const denom = y0 - 2 * y1 + y2;
+  if (denom === 0) return 0;
+  const offset = (0.5 * (y0 - y2)) / denom;
+  return Math.max(-0.5, Math.min(0.5, offset));
+}
+
 // Local-maxima peak picking, prominence relative to a local average
 // "noise floor" around each candidate bin. Deliberately simple — good
 // enough to validate against synthetic signals, not a final algorithm.
@@ -77,8 +91,11 @@ export function findPeaks(
     const prominenceDb = magDb[i] - localAvg;
 
     if (prominenceDb >= minProminenceDb) {
+      const binWidthHz = frequencies[1] - frequencies[0];
+      const offset = parabolicOffset(magDb, i);
       candidates.push({
-        frequencyHz: frequencies[i],
+        frequencyHz: frequencies[i] + offset * binWidthHz,
+        binFrequencyHz: frequencies[i],
         magnitudeDb: magDb[i],
         prominenceDb,
       });

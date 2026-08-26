@@ -6,7 +6,13 @@ import { generateSineMix, generateWhiteNoise } from "./synthetic-signals.js";
 const SAMPLE_RATE = 48000;
 const N = 8192;
 const BIN_HZ = SAMPLE_RATE / N; // ~5.86 Hz
-const TOLERANCE_HZ = BIN_HZ * 2;
+// findPeaks does quadratic (parabolic) interpolation across the peak bin
+// and its two neighbors, so accuracy is much tighter than one bin width.
+// Measured empirically: <=0.12 Hz worst case over 30 noisy trials at
+// 0.2-amplitude noise on a 1.0-amplitude tone. 1 Hz leaves real margin
+// without being so loose it would miss a regression back to bin-only
+// resolution (~5.86 Hz).
+const TOLERANCE_HZ = 1;
 
 test("finds a single known frequency", () => {
   const samples = generateSineMix([220], { sampleRate: SAMPLE_RATE, durationSamples: N });
