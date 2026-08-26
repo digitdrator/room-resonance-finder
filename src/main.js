@@ -38,6 +38,7 @@ const downloadBtn = document.getElementById("download-btn");
 const peaksListEl = document.getElementById("peaks-list");
 
 const scanBtn = document.getElementById("scan-btn");
+const scanBtnBottom = document.getElementById("scan-btn-bottom");
 const scanStatusEl = document.getElementById("scan-status");
 const scanResultsListEl = document.getElementById("scan-results-list");
 const saveBaselineBtn = document.getElementById("save-baseline-btn");
@@ -70,6 +71,7 @@ micBtn.addEventListener("click", async () => {
     requestAnimationFrame(drawLoop);
     captureBtn.disabled = false;
     scanBtn.disabled = false;
+    scanBtnBottom.disabled = false;
     micBtn.hidden = true;
     micDisableBtn.hidden = false;
   } catch (err) {
@@ -88,6 +90,7 @@ micDisableBtn.addEventListener("click", () => {
   spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
   captureBtn.disabled = true;
   scanBtn.disabled = true;
+  scanBtnBottom.disabled = true;
   micDisableBtn.hidden = true;
   micBtn.hidden = false;
 });
@@ -260,13 +263,15 @@ function renderPeaks(peaks) {
   }
 }
 
-scanBtn.addEventListener("click", async () => {
+async function runScan() {
   if (scanRunning) return;
   scanRunning = true;
   scanBtn.disabled = true;
+  scanBtnBottom.disabled = true;
   micDisableBtn.disabled = true;
   saveBaselineBtn.hidden = true;
   scanResultsListEl.innerHTML = "";
+  scanResultsListEl.scrollIntoView({ behavior: "smooth", block: "start" });
   const baselineForThisRun = loadBaseline();
 
   try {
@@ -291,9 +296,13 @@ scanBtn.addEventListener("click", async () => {
   } finally {
     scanRunning = false;
     scanBtn.disabled = false;
+    scanBtnBottom.disabled = false;
     micDisableBtn.disabled = false;
   }
-});
+}
+
+scanBtn.addEventListener("click", runScan);
+scanBtnBottom.addEventListener("click", runScan);
 
 function appendScanResultRow(step, baseline) {
   const li = document.createElement("li");
@@ -329,10 +338,13 @@ function renderBaselineStatus() {
   if (!baseline) {
     baselineStatusEl.textContent = "No baseline saved yet.";
     clearBaselineBtn.hidden = true;
+    scanBtnBottom.hidden = true;
     return;
   }
-  baselineStatusEl.textContent = `Baseline saved ${new Date(baseline.savedAt).toLocaleString()} — ${baseline.results.length} frequencies scanned. Run a new scan to compare against it.`;
+  baselineStatusEl.textContent = `Baseline saved ${new Date(baseline.savedAt).toLocaleString()} — ${baseline.results.length} frequencies scanned. Now go to the room and tap "Run scan again" below to compare.`;
   clearBaselineBtn.hidden = false;
+  scanBtnBottom.hidden = false;
+  scanBtnBottom.disabled = scanBtn.disabled;
 }
 
 saveBaselineBtn.addEventListener("click", () => {
@@ -342,7 +354,12 @@ saveBaselineBtn.addEventListener("click", () => {
     results: lastScanResults,
   };
   localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(payload));
+  saveBaselineBtn.textContent = "Saved ✓";
+  setTimeout(() => {
+    saveBaselineBtn.textContent = "Save this scan as baseline";
+  }, 2000);
   renderBaselineStatus();
+  baselineStatusEl.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
 clearBaselineBtn.addEventListener("click", () => {
