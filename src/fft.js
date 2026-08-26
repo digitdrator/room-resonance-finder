@@ -43,3 +43,21 @@ export function fft(real, imag) {
     }
   }
 }
+
+// Inverse FFT via the standard conjugate trick: ifft(x) = conj(fft(conj(x))) / N.
+// In place, same signature/contract as fft().
+export function ifft(real, imag) {
+  const n = real.length;
+  for (let i = 0; i < n; i++) imag[i] = -imag[i];
+  fft(real, imag);
+  for (let i = 0; i < n; i++) {
+    real[i] = real[i] / n;
+    imag[i] = -imag[i] / n;
+  }
+}
+
+export function nextPowerOfTwo(n) {
+  let p = 1;
+  while (p < n) p <<= 1;
+  return p;
+}
