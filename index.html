@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Room Resonance Finder — audio I/O proof</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Audio I/O proof</h1>
+  <p class="note">
+    Phase 1 only: prove simultaneous microphone capture and speaker output
+    work in this browser. No resonance detection here.
+  </p>
+
+  <section class="card">
+    <h2>1. Microphone</h2>
+    <button id="mic-btn">Enable microphone</button>
+    <p id="mic-status" class="status">Not started.</p>
+    <div class="meter"><div id="level-bar" class="meter-fill"></div></div>
+    <canvas id="spectrum" width="600" height="120"></canvas>
+    <pre id="track-settings" class="settings"></pre>
+  </section>
+
+  <section class="card">
+    <h2>2. Test tone</h2>
+    <p class="warn">Keep volume moderate. Do not use painfully loud tones.</p>
+    <button id="tone-btn">Play tone</button>
+    <label>
+      Frequency: <span id="freq-value">1000</span> Hz
+      <input id="freq-slider" type="range" min="80" max="4000" value="1000" step="1">
+    </label>
+    <label>
+      Volume: <span id="gain-value">10</span>%
+      <input id="gain-slider" type="range" min="0" max="30" value="10" step="1">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Context info</h2>
+    <pre id="context-info" class="settings"></pre>
+  </section>
+</main>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
