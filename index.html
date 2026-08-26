@@ -38,6 +38,19 @@
   </section>
 
   <section class="card">
+    <h2>3. Raw capture (Phase 2)</h2>
+    <p class="note">
+      Captures a short raw window from the microphone (max 8s) via
+      AudioWorklet, separate from the live analyser view above.
+    </p>
+    <button id="capture-btn" disabled>Start capture</button>
+    <p class="status">Elapsed: <span id="capture-elapsed">0.0</span> s</p>
+    <canvas id="waveform" width="600" height="120"></canvas>
+    <pre id="capture-stats" class="settings"></pre>
+    <button id="download-btn" hidden>Download capture (JSON)</button>
+  </section>
+
+  <section class="card">
     <h2>Context info</h2>
     <pre id="context-info" class="settings"></pre>
   </section>

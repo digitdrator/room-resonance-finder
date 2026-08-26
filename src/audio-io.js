@@ -11,6 +11,11 @@ let analyserNode = null;
 let oscillatorNode = null;
 let toneGainNode = null;
 
+let captureWorkletLoaded = false;
+let captureNode = null;
+let captureChunks = [];
+let capturing = false;
+
 export function getAudioContext() {
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -82,4 +87,73 @@ export function stopTone() {
 
 export function isToneActive() {
   return oscillatorNode !== null;
+}
+
+export async function loadCaptureWorklet() {
+  if (captureWorkletLoaded) return;
+  const ctx = getAudioContext();
+  await ctx.audioWorklet.addModule("src/capture-processor.js");
+  captureWorkletLoaded = true;
+}
+
+export function startCapture() {
+  if (!micSourceNode) {
+    throw new Error("Microphone is not enabled yet.");
+  }
+  const ctx = getAudioContext();
+  captureChunks = [];
+  capturing = true;
+
+  captureNode = new AudioWorkletNode(ctx, "capture-processor");
+  captureNode.port.onmessage = (event) => {
+    if (capturing) captureChunks.push(event.data);
+  };
+  micSourceNode.connect(captureNode);
+  captureNode.connect(ctx.destination); // silent output, keeps node pulled
+  captureNode.port.postMessage("start");
+}
+
+export function stopCapture() {
+  if (!captureNode) return null;
+
+  capturing = false;
+  captureNode.port.postMessage("stop");
+  micSourceNode.disconnect(captureNode);
+  captureNode.disconnect();
+  captureNode = null;
+
+  const totalLength = captureChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const samples = new Float32Array(totalLength);
+  let offset = 0;
+  for (const chunk of captureChunks) {
+    samples.set(chunk, offset);
+    offset += chunk.length;
+  }
+  captureChunks = [];
+
+  let peakAbs = 0;
+  let sumSquares = 0;
+  let clippedCount = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const abs = Math.abs(samples[i]);
+    if (abs > peakAbs) peakAbs = abs;
+    if (abs >= 0.99) clippedCount++;
+    sumSquares += samples[i] * samples[i];
+  }
+  const rms = samples.length > 0 ? Math.sqrt(sumSquares / samples.length) : 0;
+
+  const ctx = getAudioContext();
+  return {
+    samples,
+    sampleRate: ctx.sampleRate,
+    durationSeconds: samples.length / ctx.sampleRate,
+    peakAbs,
+    rms,
+    clippedCount,
+    clippedRatio: samples.length > 0 ? clippedCount / samples.length : 0,
+  };
+}
+
+export function isCapturing() {
+  return capturing;
 }
