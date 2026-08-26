@@ -35,16 +35,23 @@ const waveformCtx = waveformCanvas.getContext("2d");
 const captureStatsEl = document.getElementById("capture-stats");
 const downloadBtn = document.getElementById("download-btn");
 const peaksListEl = document.getElementById("peaks-list");
+const saveBaselineBtn = document.getElementById("save-baseline-btn");
+const clearBaselineBtn = document.getElementById("clear-baseline-btn");
+const baselineStatusEl = document.getElementById("baseline-status");
+const baselineCompareListEl = document.getElementById("baseline-compare-list");
 
 const spectrumCtx = spectrumCanvas.getContext("2d");
 let analyser = null;
 
 const MAX_CAPTURE_SECONDS = 8;
 const ANALYSIS_WINDOW_SIZE = 8192; // must match the window size validated in tests/analysis.test.js
+const BASELINE_STORAGE_KEY = "room-resonance-baseline-v1";
+const BASELINE_MATCH_TOLERANCE_HZ = 5;
 let captureStartTime = null;
 let captureTimerId = null;
 let autoStopTimeoutId = null;
 let lastCapture = null;
+let lastPeaks = [];
 
 micBtn.addEventListener("click", async () => {
   micBtn.disabled = true;
@@ -206,7 +213,10 @@ function finishCapture() {
   captureStatsEl.textContent = lines.join("\n");
   downloadBtn.hidden = false;
 
-  renderPeaks(analyzeCapture(result.samples, result.sampleRate));
+  lastPeaks = analyzeCapture(result.samples, result.sampleRate);
+  renderPeaks(lastPeaks);
+  saveBaselineBtn.disabled = lastPeaks.length === 0;
+  renderBaselineComparison(lastPeaks);
 }
 
 function analyzeCapture(samples, sampleRate) {
@@ -244,6 +254,91 @@ function renderPeaks(peaks) {
     peaksListEl.appendChild(li);
   }
 }
+
+function loadBaseline() {
+  try {
+    const raw = localStorage.getItem(BASELINE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderBaselineStatus() {
+  const baseline = loadBaseline();
+  if (!baseline) {
+    baselineStatusEl.textContent = "No baseline saved yet.";
+    clearBaselineBtn.hidden = true;
+    return;
+  }
+  baselineStatusEl.textContent = `Baseline saved ${new Date(baseline.savedAt).toLocaleString()} — ${baseline.peaks.length} peak(s), ${baseline.sampleRate} Hz.`;
+  clearBaselineBtn.hidden = false;
+}
+
+saveBaselineBtn.addEventListener("click", () => {
+  if (lastPeaks.length === 0 || !lastCapture) return;
+  const payload = {
+    savedAt: new Date().toISOString(),
+    sampleRate: lastCapture.sampleRate,
+    peaks: lastPeaks.map((p) => ({
+      frequencyHz: p.frequencyHz,
+      magnitudeDb: p.magnitudeDb,
+      prominenceDb: p.prominenceDb,
+    })),
+  };
+  localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(payload));
+  renderBaselineStatus();
+  renderBaselineComparison(lastPeaks);
+});
+
+clearBaselineBtn.addEventListener("click", () => {
+  localStorage.removeItem(BASELINE_STORAGE_KEY);
+  renderBaselineStatus();
+  renderBaselineComparison(lastPeaks);
+});
+
+function renderBaselineComparison(peaks) {
+  baselineCompareListEl.innerHTML = "";
+  const baseline = loadBaseline();
+  if (!baseline) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "Save a baseline capture (ideally in a neutral/open space) to compare against.";
+    baselineCompareListEl.appendChild(li);
+    return;
+  }
+  if (peaks.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No current peaks to compare.";
+    baselineCompareListEl.appendChild(li);
+    return;
+  }
+  for (const peak of peaks) {
+    const match = baseline.peaks.reduce((best, b) => {
+      const distanceHz = Math.abs(b.frequencyHz - peak.frequencyHz);
+      if (distanceHz > BASELINE_MATCH_TOLERANCE_HZ) return best;
+      if (!best || distanceHz < best.distanceHz) return { ...b, distanceHz };
+      return best;
+    }, null);
+
+    const li = document.createElement("li");
+    const freq = document.createElement("span");
+    freq.textContent = `${peak.frequencyHz.toFixed(1)} Hz`;
+    const info = document.createElement("span");
+    if (match) {
+      const deltaDb = peak.magnitudeDb - match.magnitudeDb;
+      info.textContent = `also in baseline (${deltaDb >= 0 ? "+" : ""}${deltaDb.toFixed(1)} dB vs baseline)`;
+    } else {
+      info.textContent = "not in baseline (new)";
+    }
+    li.append(freq, info);
+    baselineCompareListEl.appendChild(li);
+  }
+}
+
+renderBaselineStatus();
+renderBaselineComparison([]);
 
 function renderWaveform(samples) {
   const { width, height } = waveformCanvas;

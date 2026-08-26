@@ -64,6 +64,22 @@
       phone's own speaker/microphone response. Treat as candidates only.
     </p>
     <ul id="peaks-list" class="peaks-list"></ul>
+    <button id="save-baseline-btn" disabled>Save as baseline reference</button>
+    <button id="clear-baseline-btn" hidden>Clear baseline</button>
+    <p id="baseline-status" class="status">No baseline saved yet.</p>
+  </section>
+
+  <section class="card">
+    <h2>5. Baseline comparison (Phase 4, exploratory)</h2>
+    <p class="warn">
+      A baseline is a reference capture of this same phone — ideally in a
+      neutral/open space. It helps separate peaks that belong to the phone
+      itself from peaks that only show up in the room, but it is NOT a
+      calibrated speaker measurement. Peaks matched to baseline are more
+      likely device coloration; unmatched peaks are more likely room- or
+      position-specific — neither is certain.
+    </p>
+    <ul id="baseline-compare-list" class="peaks-list"></ul>
   </section>
 
   <section class="card">
