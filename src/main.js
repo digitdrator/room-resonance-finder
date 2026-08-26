@@ -45,6 +45,13 @@ const saveBaselineBtn = document.getElementById("save-baseline-btn");
 const clearBaselineBtn = document.getElementById("clear-baseline-btn");
 const baselineStatusEl = document.getElementById("baseline-status");
 
+const candidatesBlockEl = document.getElementById("candidates-block");
+const candidatesListEl = document.getElementById("candidates-list");
+const zoomBlockEl = document.getElementById("zoom-block");
+const zoomTitleEl = document.getElementById("zoom-title");
+const zoomStatusEl = document.getElementById("zoom-status");
+const zoomResultsListEl = document.getElementById("zoom-results-list");
+
 const spectrumCtx = spectrumCanvas.getContext("2d");
 let analyser = null;
 
@@ -270,6 +277,8 @@ async function runScan() {
   scanBtnBottom.disabled = true;
   micDisableBtn.disabled = true;
   saveBaselineBtn.hidden = true;
+  candidatesBlockEl.hidden = true;
+  zoomBlockEl.hidden = true;
   scanResultsListEl.innerHTML = "";
   scanResultsListEl.scrollIntoView({ behavior: "smooth", block: "start" });
   const baselineForThisRun = loadBaseline();
@@ -291,6 +300,9 @@ async function runScan() {
       ? `Scan complete: ${results.length} frequencies, compared against baseline above.`
       : `Scan complete: ${results.length} frequencies. Save this as baseline, then scan again in the room to compare.`;
     saveBaselineBtn.hidden = false;
+    if (baselineForThisRun) {
+      renderCandidates(results, baselineForThisRun);
+    }
   } catch (err) {
     scanStatusEl.textContent = `Scan failed: ${err.message}`;
   } finally {
@@ -322,6 +334,90 @@ function appendScanResultRow(step, baseline) {
 
   li.append(freq, level);
   scanResultsListEl.appendChild(li);
+}
+
+function renderCandidates(results, baseline) {
+  const withDelta = results
+    .map((step) => {
+      const baselineStep = baseline.results.find((b) => b.frequencyHz === step.frequencyHz);
+      if (!baselineStep) return null;
+      return { frequencyHz: step.frequencyHz, deltaDb: step.levelDb - baselineStep.levelDb };
+    })
+    .filter((x) => x && x.deltaDb > 0)
+    .sort((a, b) => b.deltaDb - a.deltaDb)
+    .slice(0, 3);
+
+  candidatesListEl.innerHTML = "";
+  if (withDelta.length === 0) {
+    candidatesBlockEl.hidden = true;
+    return;
+  }
+  candidatesBlockEl.hidden = false;
+  for (const candidate of withDelta) {
+    const li = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = `${candidate.frequencyHz} Hz (+${candidate.deltaDb.toFixed(1)} dB)`;
+    const zoomBtn = document.createElement("button");
+    zoomBtn.textContent = "Zoom in";
+    zoomBtn.addEventListener("click", () => runZoomScan(candidate.frequencyHz));
+    li.append(label, zoomBtn);
+    candidatesListEl.appendChild(li);
+  }
+}
+
+function buildFineFrequencyList(centerHz, steps = 10, spanRatio = 0.3) {
+  const lo = centerHz * (1 - spanRatio / 2);
+  const hi = centerHz * (1 + spanRatio / 2);
+  const list = [];
+  for (let i = 0; i < steps; i++) {
+    list.push(Math.round(lo + ((hi - lo) * i) / (steps - 1)));
+  }
+  return list;
+}
+
+async function runZoomScan(centerHz) {
+  if (scanRunning) return;
+  scanRunning = true;
+  scanBtn.disabled = true;
+  scanBtnBottom.disabled = true;
+  micDisableBtn.disabled = true;
+  zoomBlockEl.hidden = false;
+  zoomResultsListEl.innerHTML = "";
+  zoomTitleEl.textContent = `Zoom-in scan around ${centerHz} Hz`;
+  zoomStatusEl.textContent = "Running…";
+  zoomBlockEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const frequencies = buildFineFrequencyList(centerHz);
+  try {
+    const results = await runSteppedScan({
+      frequencies,
+      toneDurationMs: 400,
+      settleMs: 100,
+      playTone: startTone,
+      stopTone,
+      startCapture,
+      stopCapture,
+      onStep: (step, index, total) => {
+        zoomStatusEl.textContent = `Step ${index}/${total}: ${step.frequencyHz} Hz`;
+        const li = document.createElement("li");
+        const freq = document.createElement("span");
+        freq.textContent = `${step.frequencyHz} Hz`;
+        const level = document.createElement("span");
+        level.textContent = `${step.levelDb.toFixed(1)} dBFS`;
+        li.append(freq, level);
+        zoomResultsListEl.appendChild(li);
+      },
+    });
+    const peak = results.reduce((a, b) => (b.levelDb > a.levelDb ? b : a));
+    zoomStatusEl.textContent = `Sharpest response in this range: ${peak.frequencyHz} Hz (${peak.levelDb.toFixed(1)} dBFS). This narrows down where the peak sits, it does not by itself confirm the room caused it.`;
+  } catch (err) {
+    zoomStatusEl.textContent = `Zoom scan failed: ${err.message}`;
+  } finally {
+    scanRunning = false;
+    scanBtn.disabled = false;
+    scanBtnBottom.disabled = false;
+    micDisableBtn.disabled = false;
+  }
 }
 
 function loadBaseline() {
@@ -365,6 +461,8 @@ saveBaselineBtn.addEventListener("click", () => {
 clearBaselineBtn.addEventListener("click", () => {
   localStorage.removeItem(BASELINE_STORAGE_KEY);
   renderBaselineStatus();
+  candidatesBlockEl.hidden = true;
+  zoomBlockEl.hidden = true;
 });
 
 renderBaselineStatus();

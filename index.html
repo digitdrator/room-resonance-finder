@@ -88,6 +88,24 @@
     </p>
     <button id="scan-btn" disabled>Run scan</button>
     <p id="scan-status" class="status">Not started.</p>
+
+    <div id="candidates-block" hidden>
+      <h3>Top candidates vs baseline</h3>
+      <p class="warn">
+        A single scan cannot tell a stable room resonance apart from
+        something transient like an AC unit or fridge compressor cycling
+        on during the measurement. Repeat the scan and check whether the
+        same candidate shows up again before trusting it.
+      </p>
+      <ul id="candidates-list" class="peaks-list"></ul>
+    </div>
+
+    <div id="zoom-block" hidden>
+      <h3 id="zoom-title">Zoom-in scan</h3>
+      <p id="zoom-status" class="status"></p>
+      <ul id="zoom-results-list" class="peaks-list"></ul>
+    </div>
+
     <ul id="scan-results-list" class="peaks-list"></ul>
     <button id="save-baseline-btn" hidden>Save this scan as baseline</button>
     <button id="clear-baseline-btn" hidden>Clear baseline</button>
