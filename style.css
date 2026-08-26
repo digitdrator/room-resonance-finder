@@ -88,6 +88,26 @@ input[type="range"] {
   width: 100%;
 }
 
+.nudge-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.nudge-row button {
+  flex: 1;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.peaks-list li button {
+  width: auto;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  margin-left: 0.5rem;
+}
+
 .peaks-list {
   list-style: none;
   margin: 0.6rem 0 0;

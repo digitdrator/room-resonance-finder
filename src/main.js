@@ -51,6 +51,7 @@ const zoomBlockEl = document.getElementById("zoom-block");
 const zoomTitleEl = document.getElementById("zoom-title");
 const zoomStatusEl = document.getElementById("zoom-status");
 const zoomResultsListEl = document.getElementById("zoom-results-list");
+const zoomListenBtn = document.getElementById("zoom-listen-btn");
 
 const spectrumCtx = spectrumCanvas.getContext("2d");
 let analyser = null;
@@ -175,6 +176,36 @@ gainSlider.addEventListener("input", () => {
   gainValue.textContent = gainSlider.value;
   setToneGain(currentGainLinear());
 });
+
+for (const btn of document.querySelectorAll("[data-nudge]")) {
+  btn.addEventListener("click", () => {
+    const delta = Number(btn.dataset.nudge);
+    const min = Number(freqSlider.min);
+    const max = Number(freqSlider.max);
+    const next = Math.min(max, Math.max(min, Number(freqSlider.value) + delta));
+    freqSlider.value = next;
+    freqValue.textContent = next;
+    if (isToneActive()) setToneFrequency(next);
+  });
+}
+
+// Jump from a candidate/zoom-scan result straight into the manual test
+// tone, for by-ear verification (test-protocol.md "Manual Verification").
+function listenToFrequency(freqHz) {
+  const min = Number(freqSlider.min);
+  const max = Number(freqSlider.max);
+  const clamped = Math.min(max, Math.max(min, freqHz));
+  freqSlider.value = clamped;
+  freqValue.textContent = clamped;
+  if (!isToneActive()) {
+    startTone(clamped, currentGainLinear());
+    toneBtn.textContent = "Stop tone";
+    toneBtn.classList.add("active");
+  } else {
+    setToneFrequency(clamped);
+  }
+  document.getElementById("tone-section").scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 captureBtn.addEventListener("click", async () => {
   if (isCapturing()) {
@@ -357,10 +388,13 @@ function renderCandidates(results, baseline) {
     const li = document.createElement("li");
     const label = document.createElement("span");
     label.textContent = `${candidate.frequencyHz} Hz (+${candidate.deltaDb.toFixed(1)} dB)`;
+    const listenBtn = document.createElement("button");
+    listenBtn.textContent = "Listen";
+    listenBtn.addEventListener("click", () => listenToFrequency(candidate.frequencyHz));
     const zoomBtn = document.createElement("button");
     zoomBtn.textContent = "Zoom in";
     zoomBtn.addEventListener("click", () => runZoomScan(candidate.frequencyHz));
-    li.append(label, zoomBtn);
+    li.append(label, listenBtn, zoomBtn);
     candidatesListEl.appendChild(li);
   }
 }
@@ -383,6 +417,7 @@ async function runZoomScan(centerHz) {
   micDisableBtn.disabled = true;
   zoomBlockEl.hidden = false;
   zoomResultsListEl.innerHTML = "";
+  zoomListenBtn.hidden = true;
   zoomTitleEl.textContent = `Zoom-in scan around ${centerHz} Hz`;
   zoomStatusEl.textContent = "Running…";
   zoomBlockEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -410,6 +445,8 @@ async function runZoomScan(centerHz) {
     });
     const peak = results.reduce((a, b) => (b.levelDb > a.levelDb ? b : a));
     zoomStatusEl.textContent = `Sharpest response in this range: ${peak.frequencyHz} Hz (${peak.levelDb.toFixed(1)} dBFS). This narrows down where the peak sits, it does not by itself confirm the room caused it.`;
+    zoomListenBtn.hidden = false;
+    zoomListenBtn.onclick = () => listenToFrequency(peak.frequencyHz);
   } catch (err) {
     zoomStatusEl.textContent = `Zoom scan failed: ${err.message}`;
   } finally {
