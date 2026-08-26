@@ -10,6 +10,8 @@ let micSourceNode = null;
 let analyserNode = null;
 let oscillatorNode = null;
 let toneGainNode = null;
+let bufferSourceNode = null;
+let bufferGainNode = null;
 
 let captureWorkletLoaded = false;
 let captureNode = null;
@@ -102,6 +104,41 @@ export function stopTone() {
 
 export function isToneActive() {
   return oscillatorNode !== null;
+}
+
+// Plays an arbitrary sample buffer (e.g. a generated sweep) through the
+// speaker once. samples is played at the AudioContext's own sample rate
+// -- callers must generate the buffer at getAudioContext().sampleRate so
+// deconvolution later matches.
+export function playBuffer(samples, gainLinear) {
+  const ctx = getAudioContext();
+  stopBuffer();
+
+  const audioBuffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+  audioBuffer.getChannelData(0).set(samples);
+
+  bufferSourceNode = ctx.createBufferSource();
+  bufferSourceNode.buffer = audioBuffer;
+  bufferGainNode = ctx.createGain();
+  bufferGainNode.gain.value = gainLinear;
+  bufferSourceNode.connect(bufferGainNode).connect(ctx.destination);
+  bufferSourceNode.start();
+}
+
+export function stopBuffer() {
+  if (bufferSourceNode) {
+    try {
+      bufferSourceNode.stop();
+    } catch {
+      // already stopped naturally, ignore
+    }
+    bufferSourceNode.disconnect();
+    bufferSourceNode = null;
+  }
+  if (bufferGainNode) {
+    bufferGainNode.disconnect();
+    bufferGainNode = null;
+  }
 }
 
 export async function loadCaptureWorklet() {

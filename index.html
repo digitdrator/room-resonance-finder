@@ -3,15 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Room Resonance Finder — audio I/O proof</title>
+<title>Room Resonance Finder — sweep measurement</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <h1>Audio I/O proof</h1>
+  <h1>Room Resonance Finder</h1>
   <p class="note">
-    Phase 1 only: prove simultaneous microphone capture and speaker output
-    work in this browser. No resonance detection here.
+    Plays a sweeping tone through the phone speaker, records the
+    response, mathematically recovers the impulse response, and checks
+    which frequencies keep "ringing" longest after the sweep stops —
+    that decay behavior, not loudness, is what identifies a resonance.
   </p>
 
   <section class="card">
@@ -35,7 +37,7 @@
     <button id="tone-btn">Play tone</button>
     <label>
       Frequency: <span id="freq-value">1000</span> Hz
-      <input id="freq-slider" type="range" min="30" max="2500" value="1000" step="1">
+      <input id="freq-slider" type="range" min="30" max="4000" value="1000" step="1">
     </label>
     <div class="nudge-row">
       <button data-nudge="-5">-5 Hz</button>
@@ -50,74 +52,41 @@
   </section>
 
   <section class="card">
-    <h2>3. Raw capture (Phase 2)</h2>
+    <h2>3. Room sweep measurement</h2>
     <p class="note">
-      Captures a short raw window from the microphone (max 8s) via
-      AudioWorklet, separate from the live analyser view above.
+      40 Hz-4000 Hz exponential sweep, ~3s, plus ~2.5s of silence to catch
+      the ring-down. Keep the phone still and the room quiet. Total
+      ~6 seconds.
     </p>
-    <button id="capture-btn" disabled>Start capture</button>
-    <p class="status">Elapsed: <span id="capture-elapsed">0.0</span> s</p>
-    <canvas id="waveform" width="600" height="120"></canvas>
-    <pre id="capture-stats" class="settings"></pre>
-    <button id="download-btn" hidden>Download capture (JSON)</button>
-  </section>
+    <button id="sweep-btn" disabled>Run sweep</button>
+    <p id="sweep-status" class="status">Not started.</p>
 
-  <section class="card">
-    <h2>4. Exploratory peaks (ambient, not a measurement)</h2>
-    <p class="warn">
-      These are raw spectral peaks from whatever the microphone happens to
-      pick up during a raw capture — no known signal is played, so this is
-      NOT a device or room measurement, just an ambient-noise view. Not
-      used for baseline. See section 5 for the actual measurement.
-    </p>
-    <ul id="peaks-list" class="peaks-list"></ul>
-  </section>
+    <h3>Recorded waveform</h3>
+    <p class="note">What the microphone captured — sweep, then silence/ring-down.</p>
+    <canvas id="sweep-waveform" width="600" height="100"></canvas>
 
-  <section class="card">
-    <h2>5. Frequency response scan (stepped sine)</h2>
+    <h3>Recovered impulse response (near peak)</h3>
     <p class="note">
-      Plays a known sine tone at each of 18 test frequencies (40 Hz-2000
-      Hz), one at a time, and measures the microphone level while each
-      tone plays — a real driven measurement, not a guess from ambient
-      noise. Takes about 15 seconds. Keep the phone still and quiet
-      surroundings for a meaningful result.
+      Result of deconvolving the recording. A clean sharp spike here means
+      the measurement worked; a smeared/noisy shape means low SNR on this
+      device.
     </p>
+    <canvas id="sweep-ir" width="600" height="100"></canvas>
+
+    <h3>Decay curves — top candidates</h3>
+    <p class="note">
+      Level over time for the frequencies that decayed slowest after the
+      sweep stopped (the "tails"). A flatter line = more ringing = more
+      likely a resonance. <span id="sweep-legend"></span>
+    </p>
+    <canvas id="sweep-decay-curves" width="600" height="160"></canvas>
+
     <p class="warn">
-      Workflow: run this scan once in a neutral/open space and tap
-      "Save this scan as baseline" below. Then come back (same page,
-      baseline is saved on this phone) and run the scan again in the room
-      you want to check — this list will then show, per frequency, how
-      many dB louder or quieter the room scan is versus your saved
-      baseline. Large positive values are room-effect candidates; this is
-      NOT a calibrated measurement and device drift/position also affect
-      it.
+      A single sweep cannot tell a stable room resonance apart from a
+      transient noise source. Repeat the measurement and check whether
+      the same candidate keeps showing up before trusting it.
     </p>
-    <button id="scan-btn" disabled>Run scan</button>
-    <p id="scan-status" class="status">Not started.</p>
-
-    <div id="candidates-block" hidden>
-      <h3>Top candidates vs baseline</h3>
-      <p class="warn">
-        A single scan cannot tell a stable room resonance apart from
-        something transient like an AC unit or fridge compressor cycling
-        on during the measurement. Repeat the scan and check whether the
-        same candidate shows up again before trusting it.
-      </p>
-      <ul id="candidates-list" class="peaks-list"></ul>
-    </div>
-
-    <div id="zoom-block" hidden>
-      <h3 id="zoom-title">Zoom-in scan</h3>
-      <p id="zoom-status" class="status"></p>
-      <ul id="zoom-results-list" class="peaks-list"></ul>
-      <button id="zoom-listen-btn" hidden>Listen to this frequency</button>
-    </div>
-
-    <ul id="scan-results-list" class="peaks-list"></ul>
-    <button id="save-baseline-btn" hidden>Save this scan as baseline</button>
-    <button id="clear-baseline-btn" hidden>Clear baseline</button>
-    <p id="baseline-status" class="status">No baseline saved yet.</p>
-    <button id="scan-btn-bottom" hidden>Run scan again (now in the room)</button>
+    <ul id="sweep-candidates-list" class="peaks-list"></ul>
   </section>
 
   <section class="card">

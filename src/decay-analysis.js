@@ -72,6 +72,7 @@ export function estimateDecayRates(
       frequencyHz: freq,
       decayRateDbPerSec: slope,
       initialLevelDb: intercept,
+      series: { times, levelsDb },
     });
   }
   return results;
