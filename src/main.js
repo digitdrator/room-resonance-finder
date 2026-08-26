@@ -13,7 +13,7 @@ import {
   isCapturing,
 } from "./audio-io.js";
 import { magnitudeSpectrum, findPeaks } from "./analysis.js";
-import { runSteppedScan } from "./scan.js";
+import { runSteppedScan, measureNoiseFloor } from "./scan.js";
 
 const micBtn = document.getElementById("mic-btn");
 const micDisableBtn = document.getElementById("mic-disable-btn");
@@ -58,13 +58,15 @@ let analyser = null;
 
 const MAX_CAPTURE_SECONDS = 8;
 const ANALYSIS_WINDOW_SIZE = 8192; // must match the window size validated in tests/analysis.test.js
-const BASELINE_STORAGE_KEY = "room-resonance-baseline-v2";
+const BASELINE_STORAGE_KEY = "room-resonance-baseline-v3";
+const SNR_CONFIDENCE_THRESHOLD_DB = 10;
 let captureStartTime = null;
 let captureTimerId = null;
 let autoStopTimeoutId = null;
 let lastCapture = null;
 let lastPeaks = [];
 let lastScanResults = [];
+let lastNoiseFloorDb = null;
 let scanRunning = false;
 
 micBtn.addEventListener("click", async () => {
@@ -316,16 +318,22 @@ async function runScan() {
 
   try {
     await loadCaptureWorklet();
-    const results = await runSteppedScan({
+    scanStatusEl.textContent = "Measuring ambient noise floor (stay quiet)…";
+    const noiseFloorDb = await measureNoiseFloor({ startCapture, stopCapture, durationMs: 500 });
+    lastNoiseFloorDb = noiseFloorDb;
+
+    const rawResults = await runSteppedScan({
       playTone: startTone,
       stopTone,
       startCapture,
       stopCapture,
       onStep: (step, index, total) => {
-        scanStatusEl.textContent = `Step ${index}/${total}: ${step.frequencyHz} Hz -> ${step.levelDb.toFixed(1)} dBFS`;
-        appendScanResultRow(step, baselineForThisRun);
+        const snrDb = step.levelDb - noiseFloorDb;
+        scanStatusEl.textContent = `Step ${index}/${total}: ${step.frequencyHz} Hz -> ${step.levelDb.toFixed(1)} dBFS (SNR ${snrDb.toFixed(1)} dB)`;
+        appendScanResultRow({ ...step, snrDb }, baselineForThisRun);
       },
     });
+    const results = rawResults.map((step) => ({ ...step, snrDb: step.levelDb - noiseFloorDb }));
     lastScanResults = results;
     scanStatusEl.textContent = baselineForThisRun
       ? `Scan complete: ${results.length} frequencies, compared against baseline above.`
@@ -353,34 +361,56 @@ function appendScanResultRow(step, baseline) {
   freq.textContent = `${step.frequencyHz} Hz`;
   const level = document.createElement("span");
 
+  const lowConfidence = typeof step.snrDb === "number" && step.snrDb < SNR_CONFIDENCE_THRESHOLD_DB;
+  const suffix = lowConfidence ? " ⚠ near noise floor, speaker may not reach here" : "";
+
   const baselineStep = baseline?.results.find((b) => b.frequencyHz === step.frequencyHz);
   if (baselineStep) {
     const deltaDb = step.levelDb - baselineStep.levelDb;
-    level.textContent = `${step.levelDb.toFixed(1)} dBFS (${deltaDb >= 0 ? "+" : ""}${deltaDb.toFixed(1)} dB vs baseline)`;
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS (${deltaDb >= 0 ? "+" : ""}${deltaDb.toFixed(1)} dB vs baseline)${suffix}`;
   } else if (baseline) {
-    level.textContent = `${step.levelDb.toFixed(1)} dBFS (no baseline data at this frequency)`;
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS (no baseline data at this frequency)${suffix}`;
   } else {
-    level.textContent = `${step.levelDb.toFixed(1)} dBFS`;
+    level.textContent = `${step.levelDb.toFixed(1)} dBFS${suffix}`;
   }
+  if (lowConfidence) li.classList.add("low-confidence");
 
   li.append(freq, level);
   scanResultsListEl.appendChild(li);
 }
 
 function renderCandidates(results, baseline) {
-  const withDelta = results
+  const allDeltas = results
     .map((step) => {
       const baselineStep = baseline.results.find((b) => b.frequencyHz === step.frequencyHz);
       if (!baselineStep) return null;
-      return { frequencyHz: step.frequencyHz, deltaDb: step.levelDb - baselineStep.levelDb };
+      const roomSnrOk = typeof step.snrDb !== "number" || step.snrDb >= SNR_CONFIDENCE_THRESHOLD_DB;
+      const baselineSnrOk =
+        typeof baselineStep.snrDb !== "number" || baselineStep.snrDb >= SNR_CONFIDENCE_THRESHOLD_DB;
+      return {
+        frequencyHz: step.frequencyHz,
+        deltaDb: step.levelDb - baselineStep.levelDb,
+        confident: roomSnrOk && baselineSnrOk,
+      };
     })
-    .filter((x) => x && x.deltaDb > 0)
+    .filter((x) => x && x.deltaDb > 0);
+
+  const withDelta = allDeltas
+    .filter((x) => x.confident)
     .sort((a, b) => b.deltaDb - a.deltaDb)
     .slice(0, 3);
+  const excludedCount = allDeltas.length - withDelta.length;
 
   candidatesListEl.innerHTML = "";
+  if (excludedCount > 0) {
+    const note = document.createElement("li");
+    note.className = "empty";
+    note.textContent = `${excludedCount} positive-delta frequenc${excludedCount === 1 ? "y" : "ies"} excluded: signal too close to the noise floor (SNR < ${SNR_CONFIDENCE_THRESHOLD_DB} dB), likely a speaker/mic limitation rather than a real difference.`;
+    candidatesListEl.appendChild(note);
+  }
   if (withDelta.length === 0) {
-    candidatesBlockEl.hidden = true;
+    if (excludedCount === 0) candidatesBlockEl.hidden = true;
+    else candidatesBlockEl.hidden = false;
     return;
   }
   candidatesBlockEl.hidden = false;
@@ -484,6 +514,7 @@ saveBaselineBtn.addEventListener("click", () => {
   if (lastScanResults.length === 0) return;
   const payload = {
     savedAt: new Date().toISOString(),
+    noiseFloorDb: lastNoiseFloorDb,
     results: lastScanResults,
   };
   localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(payload));

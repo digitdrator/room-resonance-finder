@@ -130,6 +130,11 @@ input[type="range"] {
   color: #888;
 }
 
+.peaks-list li.low-confidence {
+  color: #777;
+  font-style: italic;
+}
+
 .settings {
   font-size: 0.75rem;
   color: #8af;

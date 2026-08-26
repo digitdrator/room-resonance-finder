@@ -14,6 +14,18 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Measures ambient noise with no tone playing, so scan results can be
+// judged against it (signal near the noise floor is not a reliable
+// measurement -- often means the speaker cannot produce real output at
+// that frequency, not that the room is quiet there).
+export async function measureNoiseFloor({ startCapture, stopCapture, durationMs = 500 } = {}) {
+  startCapture();
+  await sleep(durationMs);
+  const capture = stopCapture();
+  const rms = capture ? capture.rms : 0;
+  return 20 * Math.log10(Math.max(rms, 1e-9));
+}
+
 export async function runSteppedScan({
   frequencies = DEFAULT_TEST_FREQUENCIES_HZ,
   toneDurationMs = 500,
