@@ -38,16 +38,25 @@ export function magnitudeSpectrum(samples, sampleRate) {
 export function findPeaks(
   frequencies,
   magnitudes,
-  { maxPeaks = 5, minProminenceDb = 6, neighborhoodBins = 20 } = {}
+  { maxPeaks = 5, minProminenceDb = 6, neighborhoodBins = 20, minRelativeToMaxDb = 60 } = {}
 ) {
   const n = magnitudes.length;
   const magDb = new Float64Array(n);
+  let globalMaxDb = -Infinity;
   for (let i = 0; i < n; i++) {
     magDb[i] = 20 * Math.log10(Math.max(magnitudes[i], 1e-9));
+    if (magDb[i] > globalMaxDb) globalMaxDb = magDb[i];
   }
+  // Below this, a bin is numerical noise floor / silence, not signal —
+  // without this gate, near-zero magnitude bins in an otherwise silent
+  // region can show huge *relative* prominence against an even quieter
+  // neighborhood while carrying no real energy.
+  const absoluteFloorDb = globalMaxDb - minRelativeToMaxDb;
 
   const candidates = [];
   for (let i = 2; i < n - 2; i++) {
+    if (magDb[i] < absoluteFloorDb) continue;
+
     const isLocalMax =
       magDb[i] > magDb[i - 1] &&
       magDb[i] >= magDb[i + 1] &&

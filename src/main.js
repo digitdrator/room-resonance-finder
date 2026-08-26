@@ -12,6 +12,7 @@ import {
   stopCapture,
   isCapturing,
 } from "./audio-io.js";
+import { magnitudeSpectrum, findPeaks } from "./analysis.js";
 
 const micBtn = document.getElementById("mic-btn");
 const micDisableBtn = document.getElementById("mic-disable-btn");
@@ -33,11 +34,13 @@ const waveformCanvas = document.getElementById("waveform");
 const waveformCtx = waveformCanvas.getContext("2d");
 const captureStatsEl = document.getElementById("capture-stats");
 const downloadBtn = document.getElementById("download-btn");
+const peaksListEl = document.getElementById("peaks-list");
 
 const spectrumCtx = spectrumCanvas.getContext("2d");
 let analyser = null;
 
 const MAX_CAPTURE_SECONDS = 8;
+const ANALYSIS_WINDOW_SIZE = 8192; // must match the window size validated in tests/analysis.test.js
 let captureStartTime = null;
 let captureTimerId = null;
 let autoStopTimeoutId = null;
@@ -202,6 +205,44 @@ function finishCapture() {
   }
   captureStatsEl.textContent = lines.join("\n");
   downloadBtn.hidden = false;
+
+  renderPeaks(analyzeCapture(result.samples, result.sampleRate));
+}
+
+function analyzeCapture(samples, sampleRate) {
+  const window = extractAnalysisWindow(samples, ANALYSIS_WINDOW_SIZE);
+  const { frequencies, magnitudes } = magnitudeSpectrum(window, sampleRate);
+  return findPeaks(frequencies, magnitudes, { maxPeaks: 5, minProminenceDb: 6 });
+}
+
+function extractAnalysisWindow(samples, windowSize) {
+  if (samples.length <= windowSize) {
+    const padded = new Float32Array(windowSize);
+    padded.set(samples);
+    return padded;
+  }
+  const start = Math.floor((samples.length - windowSize) / 2);
+  return samples.subarray(start, start + windowSize);
+}
+
+function renderPeaks(peaks) {
+  peaksListEl.innerHTML = "";
+  if (peaks.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No peaks above the prominence threshold.";
+    peaksListEl.appendChild(li);
+    return;
+  }
+  for (const peak of peaks) {
+    const li = document.createElement("li");
+    const freq = document.createElement("span");
+    freq.textContent = `${peak.frequencyHz.toFixed(1)} Hz`;
+    const prom = document.createElement("span");
+    prom.textContent = `+${peak.prominenceDb.toFixed(1)} dB`;
+    li.append(freq, prom);
+    peaksListEl.appendChild(li);
+  }
 }
 
 function renderWaveform(samples) {

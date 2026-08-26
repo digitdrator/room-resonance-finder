@@ -49,6 +49,20 @@ test("still finds the peak with added noise", () => {
   assert.ok(found, `expected a peak near 300 Hz despite noise, got ${JSON.stringify(peaks)}`);
 });
 
+test("clean single tone (no noise) does not produce spurious extra peaks", () => {
+  // Regression test: numerical FFT noise floor in near-silent bins can show
+  // huge *relative* prominence against an even quieter neighborhood while
+  // carrying no real energy. Found via manual browser testing with a clean
+  // 250 Hz tone, which without an absolute-level gate also reported
+  // several bogus peaks around -100 to -113 dBFS.
+  const samples = generateSineMix([250], { sampleRate: SAMPLE_RATE, durationSamples: N });
+  const { frequencies, magnitudes } = magnitudeSpectrum(samples, SAMPLE_RATE);
+  const peaks = findPeaks(frequencies, magnitudes, { maxPeaks: 5, minProminenceDb: 6 });
+
+  assert.equal(peaks.length, 1, `expected exactly one peak, got ${JSON.stringify(peaks)}`);
+  assert.ok(Math.abs(peaks[0].frequencyHz - 250) <= TOLERANCE_HZ);
+});
+
 test("pure white noise does not produce a high-prominence peak", () => {
   const samples = generateWhiteNoise(N, 1);
   const { frequencies, magnitudes } = magnitudeSpectrum(samples, SAMPLE_RATE);
