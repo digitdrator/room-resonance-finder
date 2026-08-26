@@ -17,6 +17,12 @@
   <section class="card">
     <h2>1. Microphone</h2>
     <button id="mic-btn">Enable microphone</button>
+    <button id="mic-disable-btn" hidden>Disable microphone</button>
+    <p class="note">
+      Other apps' audio may sound degraded while the microphone is active —
+      this is an Android/Chrome system behavior, not specific to this page.
+      Disable the microphone when you are not actively measuring.
+    </p>
     <p id="mic-status" class="status">Not started.</p>
     <div class="meter"><div id="level-bar" class="meter-fill"></div></div>
     <canvas id="spectrum" width="600" height="120"></canvas>

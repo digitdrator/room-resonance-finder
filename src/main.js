@@ -1,6 +1,7 @@
 import {
   getAudioContext,
   enableMicrophone,
+  disableMicrophone,
   startTone,
   stopTone,
   setToneFrequency,
@@ -13,6 +14,7 @@ import {
 } from "./audio-io.js";
 
 const micBtn = document.getElementById("mic-btn");
+const micDisableBtn = document.getElementById("mic-disable-btn");
 const micStatus = document.getElementById("mic-status");
 const levelBar = document.getElementById("level-bar");
 const spectrumCanvas = document.getElementById("spectrum");
@@ -52,11 +54,25 @@ micBtn.addEventListener("click", async () => {
     renderContextInfo();
     requestAnimationFrame(drawLoop);
     captureBtn.disabled = false;
+    micBtn.hidden = true;
+    micDisableBtn.hidden = false;
   } catch (err) {
     micStatus.textContent = `Failed: ${err.message}`;
   } finally {
     micBtn.disabled = false;
   }
+});
+
+micDisableBtn.addEventListener("click", () => {
+  if (isCapturing()) finishCapture();
+  disableMicrophone();
+  analyser = null;
+  micStatus.textContent = "Microphone disabled.";
+  levelBar.style.width = "0%";
+  spectrumCtx.clearRect(0, 0, spectrumCanvas.width, spectrumCanvas.height);
+  captureBtn.disabled = true;
+  micDisableBtn.hidden = true;
+  micBtn.hidden = false;
 });
 
 function renderContextInfo() {

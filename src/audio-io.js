@@ -46,6 +46,21 @@ export async function enableMicrophone() {
   return { analyserNode, trackSettings: track.getSettings() };
 }
 
+export function disableMicrophone() {
+  if (capturing) stopCapture();
+  if (micStream) {
+    for (const track of micStream.getAudioTracks()) track.stop();
+  }
+  if (micSourceNode) micSourceNode.disconnect();
+  micStream = null;
+  micSourceNode = null;
+  analyserNode = null;
+}
+
+export function isMicrophoneActive() {
+  return micStream !== null;
+}
+
 export function startTone(frequencyHz, gainLinear) {
   const ctx = getAudioContext();
   stopTone();
