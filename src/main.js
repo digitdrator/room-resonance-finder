@@ -221,8 +221,11 @@ downloadBtn.addEventListener("click", () => {
   const a = document.createElement("a");
   a.href = url;
   a.download = `room-resonance-capture-${Date.now()}.json`;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 });
 
 window.addEventListener("pagehide", stopTone);
